@@ -87,6 +87,6 @@ curl -qs "https://$FQDN" | jq;
       "message": "Welcome to the Evolution API, it is working!",
       "version": "2.2.3",
       "clientName": "evolution_exchange",
-      "manager": "http://evolution-api.aluno001.ajustefino.com/manager",
+      "manager": "http://evolution-api.aluno003.ajustefino.com/manager",
       "documentation": "https://doc.evolution-api.com"
     }
