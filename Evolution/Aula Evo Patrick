@@ -1,0 +1,92 @@
+docker exec -it --user root pgvector-main psql -U postgres;
+    -- Criar usuário:
+    CREATE USER evolution WITH PASSWORD 'evosql' CREATEDB LOGIN;
+    -- Criar db e usuario do evolution:
+    CREATE DATABASE evolution_api WITH OWNER = evolution ENCODING = 'UTF8';
+    -- Conectar no banco:
+    \c evolution_api;
+    -- Adicionar extensão e poderes:
+    CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+    -- Conceder todos os privilégios no banco:
+    GRANT ALL PRIVILEGES ON DATABASE evolution_api TO evolution;
+    GRANT ALL ON SCHEMA public TO evolution;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO evolution;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO evolution;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO evolution;
+    -- Sair do terminal postgres:
+    \q
+
+
+# Preparar variáveis:
+NAME="evolution-api";
+DOMAIN=$(hostname -f);
+FQDN="$NAME.$DOMAIN";
+TZ="America/Sao_Paulo";
+
+# Preparar diretório de armazenamento:
+mkdir -p /storage/evolution-api;
+mkdir -p /storage/evolution-api/instances;
+mkdir -p /storage/evolution-api/store;
+mkdir -p /storage/evolution-api/logs;
+
+# Obter imagem do software do container, ou: atendai/evolution-api:v2.2.3
+IMAGE="evoapicloud/evolution-api:homolog"; 
+docker pull $IMAGE;
+
+
+# Senha de administração:
+AUTHENTICATION_API_KEY="nuva_okia_2025";
+
+# Idioma: en, pt-BR
+LANGUAGE="en";
+
+# Banco de dados
+DATABASE_PROVIDER=postgresql;
+DATABASE_CONNECTION_URI="evolution:evosql@pgvector-main:5432/evolution_api";
+
+# Cliente WhatsApp Web:
+CONFIG_SESSION_PHONE_CLIENT="Windows";
+CONFIG_SESSION_PHONE_NAME="Chrome";
+CONFIG_SESSION_PHONE_VERSION="2.3000.1023204200"; # anterior: 2.3000.1015901307
+
+
+
+docker rm -f $NAME 2>/dev/null;
+docker run -d --restart=always --name $NAME -h $NAME.intranet.br --memory=2g --memory-swap=2g \
+ --network network_public --ip=10.249.190.254 -e TZ=$TZ -e LANGUAGE=en \
+ -e AUTHENTICATION_API_KEY=$AUTHENTICATION_API_KEY -e SERVER_URL=https://$FQDN \
+ -e DATABASE_PROVIDER=$DATABASE_PROVIDER \
+ -e DATABASE_CONNECTION_URI="$DATABASE_PROVIDER://$DATABASE_CONNECTION_URI" \
+ -e WEBHOOK_GLOBAL_ENABLED=true -e WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=true \
+ -e WEBSOCKET_ENABLED=true -e WEBSOCKET_GLOBAL_EVENTS=true -e LOG_COLOR=true \
+ -e CONFIG_SESSION_PHONE_CLIENT=$CONFIG_SESSION_PHONE_CLIENT \
+ -e CONFIG_SESSION_PHONE_NAME=$CONFIG_SESSION_PHONE_NAME \
+ -e CONFIG_SESSION_PHONE_VERSION=$CONFIG_SESSION_PHONE_VERSION \
+ -e RABBITMQ_ENABLED=false -e RABBITMQ_GLOBAL_ENABLED=false \
+ -e S3_ENABLED=false -e CACHE_REDIS_ENABLED=false \
+ -v /storage/evolution-api/instances:/evolution/instances \
+ -v /storage/evolution-api/store:/evolution/store -v /storage/evolution-api/logs:/evolution/logs \
+ --label "traefik.enable=true" \
+ --label "traefik.http.routers.$NAME.rule=Host(\`$FQDN\`)" \
+ --label "traefik.http.routers.$NAME.entrypoints=web,websecure" \
+ --label "traefik.http.routers.$NAME.tls=true" \
+ --label "traefik.http.routers.$NAME.tls.certresolver=letsencrypt" \
+ --label "traefik.http.services.$NAME.loadbalancer.passHostHeader=true" \
+ --label "traefik.http.services.$NAME.loadbalancer.server.port=8080" \
+ $IMAGE;
+
+
+# Testar status da API:
+# - Instalar JQ para interpretar JSON no terminal:
+which jq >/dev/null || apt-get -y install jq;
+
+# - Testar endpoint de status (/):
+curl -qs "https://$FQDN" | jq;
+    {
+      "status": 200,
+      "message": "Welcome to the Evolution API, it is working!",
+      "version": "2.2.3",
+      "clientName": "evolution_exchange",
+      "manager": "http://evolution-api.aluno001.ajustefino.com/manager",
+      "documentation": "https://doc.evolution-api.com"
+    }
